@@ -35,7 +35,7 @@ window.addEventListener('load', () => {
         return totalPressure / stroke.points.length;
     }
 
-    // Format stroke data for readable display (NOW INCLUDES AVG PRESSURE)
+    // Format stroke data for readable display 
     function formatStrokeData(data) {
         let output = "--- USER DATA ---\n";
         output += `Name: ${userData.name}\n`;
@@ -44,7 +44,7 @@ window.addEventListener('load', () => {
         output += "--- DRAWING DATA ---\n";
         
         data.forEach((drawing, dIndex) => {
-            // Display overall drawing metrics (including calculated avg pressure)
+            // Display overall drawing metrics 
             output += `\nDrawing ${dIndex + 1}: ${taskPrompts[dIndex]}\n`;
             output += `Total Strokes: ${drawing.strokeData.strokes.length}\n`;
             output += `Total Points: ${drawing.strokeData.totalPoints}\n`;
@@ -82,7 +82,7 @@ window.addEventListener('load', () => {
         document.body.removeChild(a);
     }
 
-    // Return a copy of stroke data and calculate aggregate metrics
+    // Return a copy of stroke data and calculate metrics
     window.getStrokeData = () => {
         const data = JSON.parse(JSON.stringify(strokes));
         const totalPoints = data.reduce((sum, s) => sum + s.points.length, 0);
@@ -98,7 +98,7 @@ window.addEventListener('load', () => {
     };
 
 
-    // --- 3. DRAWING & METRIC LOGIC (Unchanged) ---
+    // --- 3. DRAWING & METRIC LOGIC ---
 
     function startPosition(e) {
         if (e.pointerType === 'pen' || e.button === 0) { 
@@ -150,9 +150,7 @@ window.addEventListener('load', () => {
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
         
-        // **e.pressure is the key metric for Apple Pencil.** Defaulting to 1 if no pressure detected 
-        // helps ensure a visible line, but using 0 is safer for data integrity. 
-        // We'll rely on the pressure property provided by the browser.
+        
         const pressure = e.pressure || 0.0; 
         const now = Date.now();
 
@@ -167,7 +165,7 @@ window.addEventListener('load', () => {
         lastStroke.points.push({ x, y, pressure, dt, tTotal });
         lastTime = now;
 
-        // Drawing Visualization (Line width scaled by pressure for visual feedback)
+        // Drawing Visualization
         ctx.lineWidth = pressure > 0 ? pressure * 15 + 5 : 5;
         ctx.strokeStyle = "black";
         ctx.lineCap = "round";
@@ -224,16 +222,16 @@ window.addEventListener('load', () => {
         saveCurrentDrawing();
         currentTask++;
 
-        // Check if we are moving to the final task (index 2: "Draw a Boy")
+        
         if (currentTask === totalTasks - 1) { 
             
-            // A. Remove the "Next" button
+            
             if (nextBtn) {
                 nextBtn.style.display = "none";
                 nextBtn.remove();
             }
 
-            // B. Create and display the "Submit" button
+            
             submitBtn = document.createElement("button");
             submitBtn.textContent = "Submit";
             submitBtn.style.cssText = `
@@ -250,11 +248,11 @@ window.addEventListener('load', () => {
             submitBtn.onclick = handleSubmit;
             buttonContainer.appendChild(submitBtn);
             
-            // C. Update the task counter to the final prompt
+            
             updateTaskCounter();
 
         } else if (currentTask < totalTasks) {
-            // If there are more tasks (Task 1 or Task 2), update the prompt
+           
             updateTaskCounter();
         } 
     }
@@ -274,7 +272,7 @@ window.addEventListener('load', () => {
     // --- 5. INITIAL START SCREEN UI ---
 
     function createStartScreen() {
-        // Apply CSS to body for better scaling on iPad
+        
         document.body.style.cssText = `
             display: flex; justify-content: center; align-items: center; 
             min-height: 100vh; margin: 0; 
@@ -293,7 +291,7 @@ window.addEventListener('load', () => {
         title.textContent = "Participant Information";
         title.style.textAlign = 'center';
         
-        // Increased font size in form elements
+      
         const nameInput = createFormElement('Name:', 'input', { type: 'text', id: 'nameInput' });
         
         const ageDropdown = createFormElement('Age (5-12):', 'select', { id: 'ageDropdown' });
@@ -344,7 +342,7 @@ window.addEventListener('load', () => {
     
     function createFormElement(label, type, attrs = {}) {
         const div = document.createElement('div');
-        div.style.marginBottom = '20px'; // Increased margin
+        div.style.marginBottom = '20px'; 
 
         const labelEl = document.createElement('label');
         labelEl.textContent = label;
@@ -386,7 +384,7 @@ window.addEventListener('load', () => {
             ctx.fillRect(0, 0, canvas.width, canvas.height);
         };
 
-        // 6b. Task Counter (Prompt) - INCREASED FONT SIZE
+        // 6b. Task Counter
         taskCounter = document.createElement("p");
         taskCounter.style.cssText = `
             font-size: 36px; /* Increased font size for iPad visibility */
@@ -432,7 +430,7 @@ window.addEventListener('load', () => {
         setupDrawingListeners();
     }
     
-    // --- 7. FINAL SUBMISSION POPUP & DOWNLOAD (Minor Adjustments for Readability) ---
+    // --- 7. FINAL SUBMISSION POPUP & DOWNLOAD  ---
     
     function showSubmissionPopup() {
         const overlay = document.createElement("div");
@@ -452,12 +450,12 @@ window.addEventListener('load', () => {
         const headline = document.createElement("h3");
         headline.textContent = "Drawings Submitted Successfully!";
         headline.style.margin = "0 0 10px 0";
-        headline.style.fontSize = "24px"; // Larger font
+        headline.style.fontSize = "24px"; 
 
         const message = document.createElement("p");
-        message.textContent = "Thank you for completing the drawing tasks. Data is ready for review and download.";
+        message.textContent = "Thank you for completing the drawing tasks. Data is ready for review.";
         message.style.margin = "0 0 25px 0";
-        message.style.fontSize = "18px"; // Larger font
+        message.style.fontSize = "18px"; 
 
         const closeBtn = document.createElement("button");
         closeBtn.textContent = "Close";
@@ -596,6 +594,6 @@ window.addEventListener('load', () => {
         document.body.appendChild(dataOverlay);
     }
 
-    // Start the application with the initial screen
+  
     createStartScreen();
 });
