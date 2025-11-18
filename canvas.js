@@ -23,11 +23,19 @@ window.addEventListener('load', () => {
     // UI elements to be reused or controlled
     let taskCounter = null;
     let nextBtn = null;
-    let submitBtn = null; // Declare submitBtn globally
+    let submitBtn = null; 
     let buttonContainer = null;
 
-    // --- 2. DATA PROCESSING FUNCTIONS (Unchanged) ---
+    // --- 2. DATA PROCESSING FUNCTIONS ---
 
+    // Calculate Average Pressure for a single stroke
+    function calculateAvgPressure(stroke) {
+        if (stroke.points.length === 0) return 0;
+        const totalPressure = stroke.points.reduce((sum, p) => sum + (p.pressure || 0), 0);
+        return totalPressure / stroke.points.length;
+    }
+
+    // Format stroke data for readable display (NOW INCLUDES AVG PRESSURE)
     function formatStrokeData(data) {
         let output = "--- USER DATA ---\n";
         output += `Name: ${userData.name}\n`;
@@ -36,9 +44,11 @@ window.addEventListener('load', () => {
         output += "--- DRAWING DATA ---\n";
         
         data.forEach((drawing, dIndex) => {
+            // Display overall drawing metrics (including calculated avg pressure)
             output += `\nDrawing ${dIndex + 1}: ${taskPrompts[dIndex]}\n`;
             output += `Total Strokes: ${drawing.strokeData.strokes.length}\n`;
             output += `Total Points: ${drawing.strokeData.totalPoints}\n`;
+            output += `Average Pressure: ${drawing.strokeData.avgPressure.toFixed(3)}\n`; // Display Avg Pressure
             output += "----------------------------------------\n";
             
             drawing.strokeData.strokes.forEach((s, sIndex) => {
@@ -46,6 +56,7 @@ window.addEventListener('load', () => {
                 output += `    Duration: ${s.duration} ms\n`;
                 output += `    Avg Speed: ${s.avgSpeed.toFixed(2)} px/ms\n`;
                 output += `    Points Recorded: ${s.points.length}\n`;
+                output += `    Stroke Avg Pressure: ${calculateAvgPressure(s).toFixed(3)}\n`; // Display Stroke Avg Pressure
             });
             output += "\n";
         });
@@ -71,10 +82,19 @@ window.addEventListener('load', () => {
         document.body.removeChild(a);
     }
 
+    // Return a copy of stroke data and calculate aggregate metrics
     window.getStrokeData = () => {
         const data = JSON.parse(JSON.stringify(strokes));
         const totalPoints = data.reduce((sum, s) => sum + s.points.length, 0);
-        return { strokes: data, penLifts, totalPoints };
+        
+        // Calculate the overall average pressure for the entire drawing
+        let totalPressureSum = 0;
+        data.forEach(s => {
+            totalPressureSum += s.points.reduce((sum, p) => sum + (p.pressure || 0), 0);
+        });
+        const avgPressure = totalPoints > 0 ? totalPressureSum / totalPoints : 0;
+        
+        return { strokes: data, penLifts, totalPoints, avgPressure };
     };
 
 
@@ -130,6 +150,9 @@ window.addEventListener('load', () => {
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
         
+        // **e.pressure is the key metric for Apple Pencil.** Defaulting to 1 if no pressure detected 
+        // helps ensure a visible line, but using 0 is safer for data integrity. 
+        // We'll rely on the pressure property provided by the browser.
         const pressure = e.pressure || 0.0; 
         const now = Date.now();
 
@@ -140,9 +163,11 @@ window.addEventListener('load', () => {
             ? lastStroke.points[lastStroke.points.length - 1].tTotal + dt
             : 0;
 
+        // Record pressure data
         lastStroke.points.push({ x, y, pressure, dt, tTotal });
         lastTime = now;
 
+        // Drawing Visualization (Line width scaled by pressure for visual feedback)
         ctx.lineWidth = pressure > 0 ? pressure * 15 + 5 : 5;
         ctx.strokeStyle = "black";
         ctx.lineCap = "round";
@@ -170,7 +195,7 @@ window.addEventListener('load', () => {
     }
 
 
-    // --- 4. UI FLOW MANAGEMENT (FIXED LOGIC) ---
+    // --- 4. UI FLOW MANAGEMENT ---
 
     function updateTaskCounter() {
         taskCounter.textContent = `Drawing Task ${currentTask + 1} of ${totalTasks} — ${taskPrompts[currentTask]}`;
@@ -179,7 +204,6 @@ window.addEventListener('load', () => {
     function saveCurrentDrawing() {
         endPosition(); 
         
-        // Only save if a stroke was actually drawn
         if (strokes.length > 0) {
             const strokeData = getStrokeData();
             const pngData = canvas.toDataURL("image/png");
@@ -191,20 +215,13 @@ window.addEventListener('load', () => {
             });
         }
 
-        // Reset for the next task
         strokes = [];
         penLifts = 0;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
 
-    /**
-     * FIX: Handle the transition from Task 2 (Sun) to Task 3 (Boy).
-     * The Submit button must appear immediately after saving the Sun drawing.
-     */
     function handleNextTask() {
-        // 1. Save the drawing data for the current task
         saveCurrentDrawing();
-        
         currentTask++;
 
         // Check if we are moving to the final task (index 2: "Draw a Boy")
@@ -213,19 +230,18 @@ window.addEventListener('load', () => {
             // A. Remove the "Next" button
             if (nextBtn) {
                 nextBtn.style.display = "none";
-                nextBtn.remove(); // Clean up the DOM element
+                nextBtn.remove();
             }
 
             // B. Create and display the "Submit" button
             submitBtn = document.createElement("button");
             submitBtn.textContent = "Submit";
-            // Replicate Next button styles
             submitBtn.style.cssText = `
                 font-size: 18px;
                 padding: 10px 18px;
                 border-radius: 8px;
                 cursor: pointer;
-                background-color: #28a745; /* Use a different color for emphasis */
+                background-color: #28a745;
                 color: white;
                 border: none;
                 box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -241,12 +257,9 @@ window.addEventListener('load', () => {
             // If there are more tasks (Task 1 or Task 2), update the prompt
             updateTaskCounter();
         } 
-        // Note: No 'else' block needed, as the submit action is handled by the button itself.
     }
 
     function handleSubmit() {
-        // This function is now called when the final Submit button is pressed.
-        // It saves the data for the LAST drawing ("Draw a Boy").
         saveCurrentDrawing();
         removeDrawingListeners();
         
@@ -258,27 +271,29 @@ window.addEventListener('load', () => {
         showSubmissionPopup();
     }
     
-    // --- 5. INITIAL START SCREEN UI (Unchanged) ---
+    // --- 5. INITIAL START SCREEN UI ---
 
     function createStartScreen() {
+        // Apply CSS to body for better scaling on iPad
+        document.body.style.cssText = `
+            display: flex; justify-content: center; align-items: center; 
+            min-height: 100vh; margin: 0; 
+            font-family: sans-serif; font-size: 18px; /* Base font size increase */
+        `;
         document.body.innerHTML = '';
-        document.body.style.display = 'flex';
-        document.body.style.justifyContent = 'center';
-        document.body.style.alignItems = 'center';
-        document.body.style.height = '100vh';
-        document.body.style.margin = '0';
 
         const formContainer = document.createElement('div');
-        formContainer.style.padding = '30px';
-        formContainer.style.border = '1px solid #ccc';
-        formContainer.style.borderRadius = '10px';
-        formContainer.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
-        formContainer.style.background = '#f9f9f9';
+        formContainer.style.cssText = `
+            padding: 40px; border: 1px solid #ccc; border-radius: 12px;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.1); background: #f9f9f9;
+            min-width: 350px;
+        `;
         
         const title = document.createElement('h2');
         title.textContent = "Participant Information";
         title.style.textAlign = 'center';
         
+        // Increased font size in form elements
         const nameInput = createFormElement('Name:', 'input', { type: 'text', id: 'nameInput' });
         
         const ageDropdown = createFormElement('Age (5-12):', 'select', { id: 'ageDropdown' });
@@ -299,11 +314,11 @@ window.addEventListener('load', () => {
 
         const startBtn = document.createElement('button');
         startBtn.textContent = 'Start Drawing Task';
-        startBtn.style.marginTop = '20px';
-        startBtn.style.padding = '12px 24px';
-        startBtn.style.fontSize = '18px';
-        startBtn.style.cursor = 'pointer';
-        startBtn.style.width = '100%';
+        startBtn.style.cssText = `
+            margin-top: 25px; padding: 15px 24px; font-size: 20px;
+            cursor: pointer; width: 100%; border-radius: 8px;
+            background-color: #007bff; color: white; border: none;
+        `;
         
         startBtn.onclick = () => {
             const name = document.getElementById('nameInput').value.trim();
@@ -329,27 +344,22 @@ window.addEventListener('load', () => {
     
     function createFormElement(label, type, attrs = {}) {
         const div = document.createElement('div');
-        div.style.marginBottom = '15px';
+        div.style.marginBottom = '20px'; // Increased margin
 
         const labelEl = document.createElement('label');
         labelEl.textContent = label;
-        labelEl.style.display = 'block';
-        labelEl.style.marginBottom = '5px';
+        labelEl.style.cssText = 'display: block; margin-bottom: 8px; font-weight: bold;';
         
         const inputEl = document.createElement(type);
         Object.assign(inputEl, attrs);
-        inputEl.style.width = '100%';
-        inputEl.style.padding = '8px';
-        inputEl.style.boxSizing = 'border-box';
-        inputEl.style.borderRadius = '5px';
-        inputEl.style.border = '1px solid #ddd';
+        inputEl.style.cssText = 'width: 100%; padding: 10px; box-sizing: border-box; border-radius: 6px; border: 1px solid #ccc; font-size: 18px;';
 
         div.appendChild(labelEl);
         div.appendChild(inputEl);
         return div;
     }
 
-    // --- 6. CANVAS & TASK UI SETUP (Modified for Submit Button Creation) ---
+    // --- 6. CANVAS & TASK UI SETUP ---
 
     function initializeCanvasAndUI() {
         document.body.innerHTML = '';
@@ -376,13 +386,13 @@ window.addEventListener('load', () => {
             ctx.fillRect(0, 0, canvas.width, canvas.height);
         };
 
-        // 6b. Task Counter (Prompt)
+        // 6b. Task Counter (Prompt) - INCREASED FONT SIZE
         taskCounter = document.createElement("p");
         taskCounter.style.cssText = `
-            font-size: 28px;
+            font-size: 36px; /* Increased font size for iPad visibility */
             font-weight: bold;
             text-align: center;
-            margin: 10px 0;
+            margin: 15px 0; /* Increased margin */
             color: #333;
             user-select: none;
         `;
@@ -392,21 +402,21 @@ window.addEventListener('load', () => {
         buttonContainer = document.createElement("div");
         buttonContainer.style.cssText = `
             position: absolute;
-            top: 15px;
-            right: 15px;
+            top: 25px; /* Moved down slightly */
+            right: 25px; /* Moved in slightly */
             display: flex;
             flex-direction: row;
-            gap: 10px;
+            gap: 15px; /* Increased gap */
             z-index: 100;
         `;
         document.body.appendChild(buttonContainer);
 
-        // 6d. Next Button (Only used for tasks 1 and 2)
+        // 6d. Next Button 
         nextBtn = document.createElement("button");
         nextBtn.textContent = "Next";
         nextBtn.style.cssText = `
-            font-size: 18px;
-            padding: 10px 18px;
+            font-size: 20px; /* Increased font size */
+            padding: 12px 20px; /* Increased padding */
             border-radius: 8px;
             cursor: pointer;
             background-color: #007bff;
@@ -422,7 +432,7 @@ window.addEventListener('load', () => {
         setupDrawingListeners();
     }
     
-    // --- 7. FINAL SUBMISSION POPUP & DOWNLOAD (Unchanged) ---
+    // --- 7. FINAL SUBMISSION POPUP & DOWNLOAD (Minor Adjustments for Readability) ---
     
     function showSubmissionPopup() {
         const overlay = document.createElement("div");
@@ -434,30 +444,32 @@ window.addEventListener('load', () => {
 
         const box = document.createElement("div");
         box.style.cssText = `
-            background: #fff; padding: 25px 35px; border-radius: 10px;
+            background: #fff; padding: 30px 40px; border-radius: 12px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.25); text-align: center;
-            position: relative; min-width: 350px;
+            position: relative; min-width: 400px;
         `;
 
         const headline = document.createElement("h3");
         headline.textContent = "Drawings Submitted Successfully!";
-        headline.style.margin = "0 0 8px 0";
+        headline.style.margin = "0 0 10px 0";
+        headline.style.fontSize = "24px"; // Larger font
 
         const message = document.createElement("p");
         message.textContent = "Thank you for completing the drawing tasks. Data is ready for review and download.";
-        message.style.margin = "0 0 20px 0";
+        message.style.margin = "0 0 25px 0";
+        message.style.fontSize = "18px"; // Larger font
 
         const closeBtn = document.createElement("button");
         closeBtn.textContent = "Close";
-        closeBtn.style.cssText = `padding: 8px 16px; font-size: 16px; cursor: pointer;`;
+        closeBtn.style.cssText = `padding: 10px 20px; font-size: 18px; cursor: pointer;`;
         closeBtn.onclick = () => overlay.remove();
 
         // View Data Button
         const viewDataBtn = document.createElement("button");
         viewDataBtn.textContent = "View Stroke Data";
         viewDataBtn.style.cssText = `
-            position: absolute; bottom: 10px; right: 10px; font-size: 12px;
-            padding: 5px 10px; cursor: pointer; border-radius: 6px; opacity: 0.8;
+            position: absolute; bottom: 15px; right: 15px; font-size: 14px;
+            padding: 8px 12px; cursor: pointer; border-radius: 6px; opacity: 0.8;
             background-color: #f0f0f0; border: 1px solid #ccc;
         `;
 
@@ -481,8 +493,8 @@ window.addEventListener('load', () => {
 
         const dataBox = document.createElement("div");
         dataBox.style.cssText = `
-            background: #fff; padding: 25px; border-radius: 10px;
-            width: 90%; max-width: 1000px; height: 90%;
+            background: #fff; padding: 30px; border-radius: 12px;
+            width: 95%; max-width: 1200px; height: 95%;
             display: flex; flex-direction: column;
         `;
         
@@ -490,15 +502,15 @@ window.addEventListener('load', () => {
         const dataViewArea = document.createElement('div');
         dataViewArea.style.cssText = `
             display: flex; flex-direction: row; flex-grow: 1; gap: 20px;
-            margin-bottom: 15px; overflow: hidden;
+            margin-bottom: 20px; overflow: hidden;
         `;
         
         // 1. Text Data (Stroke Metrics)
         const textDataContainer = document.createElement('div');
         textDataContainer.style.cssText = `
-            flex: 1; padding: 10px; border: 1px solid #eee; border-radius: 5px;
+            flex: 1; padding: 15px; border: 1px solid #eee; border-radius: 8px;
             overflow: auto; font-family: monospace; white-space: pre-wrap;
-            font-size: 14px;
+            font-size: 16px; /* Increased font size */
         `;
         const dataText = document.createElement("pre");
         dataText.textContent = formatStrokeData(userData.drawings);
@@ -507,8 +519,8 @@ window.addEventListener('load', () => {
         // 2. Image Thumbnails
         const imageGallery = document.createElement('div');
         imageGallery.style.cssText = `
-            width: 300px; padding: 10px; border: 1px solid #eee; border-radius: 5px;
-            overflow-y: auto; display: flex; flex-direction: column; gap: 15px;
+            width: 350px; padding: 15px; border: 1px solid #eee; border-radius: 8px;
+            overflow-y: auto; display: flex; flex-direction: column; gap: 20px;
             align-items: center;
         `;
         
@@ -518,7 +530,8 @@ window.addEventListener('load', () => {
             
             const imgLabel = document.createElement('h4');
             imgLabel.textContent = `${index + 1}. ${drawing.task}`;
-            imgLabel.style.margin = '0 0 5px 0';
+            imgLabel.style.margin = '0 0 8px 0';
+            imgLabel.style.fontSize = '18px';
             
             const img = document.createElement('img');
             img.src = drawing.png;
@@ -539,15 +552,15 @@ window.addEventListener('load', () => {
         const controlContainer = document.createElement('div');
         controlContainer.style.cssText = `
             display: flex; justify-content: space-between; align-items: center;
-            margin-top: 10px;
+            margin-top: 15px;
         `;
         
         // Download Button
         const downloadAllBtn = document.createElement("button");
         downloadAllBtn.textContent = "Download All Data (.json & PNGs)";
         downloadAllBtn.style.cssText = `
-            padding: 10px 18px; font-size: 16px; cursor: pointer;
-            background-color: #28a745; color: white; border: none; border-radius: 6px;
+            padding: 12px 20px; font-size: 18px; cursor: pointer;
+            background-color: #28a745; color: white; border: none; border-radius: 8px;
         `;
         downloadAllBtn.onclick = () => {
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -568,8 +581,8 @@ window.addEventListener('load', () => {
         const closeDataBtn = document.createElement("button");
         closeDataBtn.textContent = "Close Data Viewer";
         closeDataBtn.style.cssText = `
-            padding: 10px 18px; font-size: 16px; cursor: pointer;
-            background-color: #dc3545; color: white; border: none; border-radius: 6px;
+            padding: 12px 20px; font-size: 18px; cursor: pointer;
+            background-color: #dc3545; color: white; border: none; border-radius: 8px;
         `;
         closeDataBtn.onclick = () => dataOverlay.remove();
 
