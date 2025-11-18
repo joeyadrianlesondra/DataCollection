@@ -373,7 +373,7 @@ window.addEventListener('load', () => {
         canvas.id = "canvas";
         document.body.appendChild(canvas);
         ctx = canvas.getContext("2d");
-
+        canvas.style.touchAction = 'none';
         canvas.height = window.innerHeight; 
         canvas.width = window.innerWidth;
         ctx.fillStyle = "white";
